@@ -42,7 +42,7 @@ from collections import OrderedDict
 
 
 class InputPadder:
-    """ Pads images such that dimensions are divisible by 32 """
+    """ Pads images such that dimensions are divisible by 64 """
     def __init__(self, dims, mode='sintel'):
         self.ht, self.wd = dims[-2:]
         pad_ht = (((self.ht // 64) + 1) * 64 - self.ht) % 64
@@ -177,31 +177,32 @@ class FlowNet2(nn.Module):
                     init.uniform_(m.bias)
                 init.xavier_uniform_(m.weight)
                 # init_deconv_bilinear(m.weight)
+          
+          # load pretrained model
+#         loaded = torch.load('/data2/liuziyang/HDR/HDR_Ghost_Removal/RAFT-master/checkpoints/flownetc-hdr-imf-short2long-fullhdrloss-smooth0.01-newdata-th1.0-occ.pth', map_location='cpu')
+#         load_net_clean = OrderedDict()
+#         for k, v in loaded.items():
+#             if 'module.' in k:  # and 'transform.' not in k:
+#                 k = k.replace('module.', '')
+#                 load_net_clean[k] = v
+#         self.flownetc.load_state_dict(load_net_clean, strict=True)
 
-        loaded = torch.load('/data2/liuziyang/HDR/HDR_Ghost_Removal/RAFT-master/checkpoints/flownetc-hdr-imf-short2long-fullhdrloss-smooth0.01-newdata-th1.0-occ.pth', map_location='cpu')
-        load_net_clean = OrderedDict()
-        for k, v in loaded.items():
-            if 'module.' in k:  # and 'transform.' not in k:
-                k = k.replace('module.', '')
-                load_net_clean[k] = v
-        self.flownetc.load_state_dict(load_net_clean, strict=True)
-
-        # loaded = torch.load('/data2/liuziyang/HDR/HDR_Ghost_Removal/RAFT-master/checkpoints/flownetsd-hdr-imf-short2long-fullloss-smooth0.01-newdata-occ.pth', map_location='cpu')
-        # load_net_clean = OrderedDict()
-        # for k, v in loaded.items():
-        #     if 'module.' in k:  # and 'transform.' not in k:
-        #         k = k.replace('module.', '')
-        #         load_net_clean[k] = v
-        # self.flownets_d.load_state_dict(load_net_clean, strict=True)
-        #
-        # loaded = torch.load('/data2/liuziyang/HDR/HDR_Ghost_Removal/RAFT-master/checkpoints/flownets-hdr-imf-short2long-fullloss-smooth0.01-newdata-occ.pth', map_location='cpu')
-        # load_net_clean = OrderedDict()
-        # for k, v in loaded.items():
-        #     if 'module.flownets_1.' in k:  # and 'transform.' not in k:
-        #         k = k.replace('module.flownets_1.', '')
-        #         load_net_clean[k] = v
-        # self.flownets_1.load_state_dict(load_net_clean, strict=True)
-        # self.flownets_2.load_state_dict(load_net_clean, strict=True)
+#         loaded = torch.load('/data2/liuziyang/HDR/HDR_Ghost_Removal/RAFT-master/checkpoints/flownetsd-hdr-imf-short2long-fullloss-smooth0.01-newdata-occ.pth', map_location='cpu')
+#         load_net_clean = OrderedDict()
+#         for k, v in loaded.items():
+#             if 'module.' in k:  # and 'transform.' not in k:
+#                 k = k.replace('module.', '')
+#                 load_net_clean[k] = v
+#         self.flownets_d.load_state_dict(load_net_clean, strict=True)
+        
+#         loaded = torch.load('/data2/liuziyang/HDR/HDR_Ghost_Removal/RAFT-master/checkpoints/flownets-hdr-imf-short2long-fullloss-smooth0.01-newdata-occ.pth', map_location='cpu')
+#         load_net_clean = OrderedDict()
+#         for k, v in loaded.items():
+#             if 'module.flownets_1.' in k:  # and 'transform.' not in k:
+#                 k = k.replace('module.flownets_1.', '')
+#                 load_net_clean[k] = v
+#         self.flownets_1.load_state_dict(load_net_clean, strict=True)
+#         self.flownets_2.load_state_dict(load_net_clean, strict=True)
 
     def init_deconv_bilinear(self, weight):
         f_shape = weight.size()
@@ -249,57 +250,57 @@ class FlowNet2(nn.Module):
         # flownets1
         # flownets1_flow2 = self.flownets_1(concat1, training=False)
         flownets1_flow2 = self.flownets_1(concat1, training=True, padder=padder)
-        # flownets1_flow = self.upsample2(flownets1_flow2*self.div_flow)
-        #
-        # # warp img1 to img0 using flownets1; magnitude of diff between img0 and and warped_img1
-        # resampled_img1 = self.resample2(x[:,3:,:,:], flownets1_flow)
-        # # warp = SpatialTransformer(flownets1_flow.shape[-2:]).to(flownets1_flow.device)
-        # # resampled_img1 = warp(x[:, 3:, :, :], flownets1_flow)
-        # diff_img0 = x[:,:3,:,:] - resampled_img1
-        # norm_diff_img0 = self.channelnorm(diff_img0)
-        #
-        # # concat img0, img1, img1->img0, flow, diff-mag
-        # concat2 = torch.cat((x, resampled_img1, flownets1_flow/self.div_flow, norm_diff_img0), dim=1)
-        #
-        # # flownets2
-        # flownets2_flow2 = self.flownets_2(concat2, training=False)
-        # flownets2_flow = self.upsample4(flownets2_flow2 * self.div_flow)
-        # norm_flownets2_flow = self.channelnorm(flownets2_flow)
-        #
-        # diff_flownets2_flow = self.resample4(x[:,3:,:,:], flownets2_flow)
-        # # if not diff_flownets2_flow.volatile:
-        # #     diff_flownets2_flow.register_hook(save_grad(self.args.grads, 'diff_flownets2_flow'))
-        #
-        # diff_flownets2_img1 = self.channelnorm((x[:,:3,:,:]-diff_flownets2_flow))
-        # # if not diff_flownets2_img1.volatile:
-        # #     diff_flownets2_img1.register_hook(save_grad(self.args.grads, 'diff_flownets2_img1'))
-        #
-        # # flownetsd
-        # flownetsd_flow2 = self.flownets_d(x, training=False)
-        # flownetsd_flow = self.upsample3(flownetsd_flow2 / self.div_flow)
-        # norm_flownetsd_flow = self.channelnorm(flownetsd_flow)
-        #
-        # diff_flownetsd_flow = self.resample3(x[:,3:,:,:], flownetsd_flow)
-        # # if not diff_flownetsd_flow.volatile:
-        # #     diff_flownetsd_flow.register_hook(save_grad(self.args.grads, 'diff_flownetsd_flow'))
-        #
-        # diff_flownetsd_img1 = self.channelnorm((x[:,:3,:,:]-diff_flownetsd_flow))
-        # # if not diff_flownetsd_img1.volatile:
-        # #     diff_flownetsd_img1.register_hook(save_grad(self.args.grads, 'diff_flownetsd_img1'))
-        #
-        # # concat img1 flownetsd, flownets2, norm_flownetsd, norm_flownets2, diff_flownetsd_img1, diff_flownets2_img1
-        # concat3 = torch.cat((x[:,:3,:,:], flownetsd_flow, flownets2_flow, norm_flownetsd_flow, norm_flownets2_flow, diff_flownetsd_img1, diff_flownets2_img1), dim=1)
-        # flownetfusion_flow = self.flownetfusion(concat3)
-        #
-        # # if not flownetfusion_flow.volatile:
-        # #     flownetfusion_flow.register_hook(save_grad(self.args.grads, 'flownetfusion_flow'))
-        #
-        # # return [padder.unpad(flownetfusion_flow[:, [1, 0], ...])]
+        flownets1_flow = self.upsample2(flownets1_flow2*self.div_flow)
+        
+        # warp img1 to img0 using flownets1; magnitude of diff between img0 and and warped_img1
+        resampled_img1 = self.resample2(x[:,3:,:,:], flownets1_flow)
+        # warp = SpatialTransformer(flownets1_flow.shape[-2:]).to(flownets1_flow.device)
+        # resampled_img1 = warp(x[:, 3:, :, :], flownets1_flow)
+        diff_img0 = x[:,:3,:,:] - resampled_img1
+        norm_diff_img0 = self.channelnorm(diff_img0)
+        
+        # concat img0, img1, img1->img0, flow, diff-mag
+        concat2 = torch.cat((x, resampled_img1, flownets1_flow/self.div_flow, norm_diff_img0), dim=1)
+        
+        # flownets2
+        flownets2_flow2 = self.flownets_2(concat2, training=False)
+        flownets2_flow = self.upsample4(flownets2_flow2 * self.div_flow)
+        norm_flownets2_flow = self.channelnorm(flownets2_flow)
+        
+        diff_flownets2_flow = self.resample4(x[:,3:,:,:], flownets2_flow)
+        # if not diff_flownets2_flow.volatile:
+        #     diff_flownets2_flow.register_hook(save_grad(self.args.grads, 'diff_flownets2_flow'))
+        
+        diff_flownets2_img1 = self.channelnorm((x[:,:3,:,:]-diff_flownets2_flow))
+        # if not diff_flownets2_img1.volatile:
+        #     diff_flownets2_img1.register_hook(save_grad(self.args.grads, 'diff_flownets2_img1'))
+        
+        # flownetsd
+        flownetsd_flow2 = self.flownets_d(x, training=False)
+        flownetsd_flow = self.upsample3(flownetsd_flow2 / self.div_flow)
+        norm_flownetsd_flow = self.channelnorm(flownetsd_flow)
+        
+        diff_flownetsd_flow = self.resample3(x[:,3:,:,:], flownetsd_flow)
+        # if not diff_flownetsd_flow.volatile:
+        #     diff_flownetsd_flow.register_hook(save_grad(self.args.grads, 'diff_flownetsd_flow'))
+        
+        diff_flownetsd_img1 = self.channelnorm((x[:,:3,:,:]-diff_flownetsd_flow))
+        # if not diff_flownetsd_img1.volatile:
+        #     diff_flownetsd_img1.register_hook(save_grad(self.args.grads, 'diff_flownetsd_img1'))
+        
+        # concat img1 flownetsd, flownets2, norm_flownetsd, norm_flownets2, diff_flownetsd_img1, diff_flownets2_img1
+        concat3 = torch.cat((x[:,:3,:,:], flownetsd_flow, flownets2_flow, norm_flownetsd_flow, norm_flownets2_flow, diff_flownetsd_img1, diff_flownets2_img1), dim=1)
+        flownetfusion_flow = self.flownetfusion(concat3)
+        
+        # if not flownetfusion_flow.volatile:
+        #     flownetfusion_flow.register_hook(save_grad(self.args.grads, 'flownetfusion_flow'))
+        
+        # return [padder.unpad(flownetfusion_flow[:, [1, 0], ...])]
 
         if training:
-            # return [padder.unpad(flownetc_flow[:, [1, 0], ...]), padder.unpad(flownets1_flow[:, [1, 0], ...]), padder.unpad(flownets2_flow[:, [1, 0], ...]),
-            #     padder.unpad(flownetsd_flow[:, [1, 0], ...]), padder.unpad(flownetfusion_flow[:, [1, 0], ...])]
-            return flownets1_flow2
+            return [padder.unpad(flownetc_flow[:, [1, 0], ...]), padder.unpad(flownets1_flow[:, [1, 0], ...]), padder.unpad(flownets2_flow[:, [1, 0], ...]),
+                padder.unpad(flownetsd_flow[:, [1, 0], ...]), padder.unpad(flownetfusion_flow[:, [1, 0], ...])]
+#             return flownets1_flow2
 
         else:
             return padder.unpad(flownetfusion_flow[:, [1, 0], ...])
